@@ -98,7 +98,7 @@ public final class MainActivity extends Activity {
     private int uiRevSeen = -1, curPanel = 0;
     private final ArrayList<String> panelNames = new ArrayList<>();
     private final ArrayList<ArrayList<String[]>> panelRows = new ArrayList<>();
-    private static final class Live { int id; char kind; float min, max, shown = Float.NaN; View view; TextView text; String label; }
+    private static final class Live { int id; char kind; float min, max, shown = Float.NaN; android.view.View view; TextView text; String label; }
     private final ArrayList<Live> live = new ArrayList<>();
 
     private void syncUi() {
