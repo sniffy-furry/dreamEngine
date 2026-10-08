@@ -40,6 +40,9 @@ jobs:
         with:
           gradle-version: '8.14'
 
+      - name: Prepare CPython 3.14 for Android
+        run: python3 tools/prepare_cpython_android.py
+
       - name: Build debug APK
         working-directory: android
         run: gradle :app:assembleDebug --no-daemon --stacktrace

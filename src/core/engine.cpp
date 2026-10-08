@@ -56,19 +56,31 @@ bool Engine::initialize() {
 void Engine::update(double dt) {
     if (!initialized_) return;
     for (auto& module : modules_) module->update(dt);
+    module_loader_.update(dt);
+    python_scripts_.update(dt);
+}
+
+bool Engine::start_python(const std::string& python_home, const std::string& script_directory) {
+    if (!python_scripts_.start(python_home)) return false;
+    return python_scripts_.run_directory(script_directory);
+}
+
+void Engine::update_python(double dt) {
+    python_scripts_.update(dt);
 }
 
 bool Engine::load_external_modules(const std::string& directory) {
-    DreamEngineHostAPI host{};
-    host.abi_version = DREAM_ENGINE_MODULE_ABI_VERSION;
-    host.log = host_log;
-    host.get_time_seconds = host_time;
+    external_host_ = {};
+    external_host_.abi_version = DREAM_ENGINE_MODULE_ABI_VERSION;
+    external_host_.log = host_log;
+    external_host_.get_time_seconds = host_time;
     python_scripts_.scan(directory);
-    return module_loader_.load_directory(directory, host);
+    return module_loader_.load_directory(directory, external_host_);
 }
 
 void Engine::shutdown() noexcept {
     module_loader_.shutdown();
+    python_scripts_.shutdown();
     if (!initialized_) return;
 
     for (auto it = modules_.rbegin(); it != modules_.rend(); ++it) {

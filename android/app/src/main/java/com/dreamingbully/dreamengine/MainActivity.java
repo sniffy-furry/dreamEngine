@@ -10,12 +10,28 @@ import android.widget.TextView;
 import android.widget.Button;
 import java.io.*;
 import java.util.*;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 
 public final class MainActivity extends Activity {
     static { System.loadLibrary("dream_engine_android"); }
     private static final int PICK_MODULE_DIR = 7001;
-    private static native void nativeStart(String moduleDir);
+    private static native void nativeStart(String moduleDir, String pythonHome);
     private static native void nativeStop();
+    private static native void nativeUpdate(double dt);
+    private final Handler tickHandler = new Handler(Looper.getMainLooper());
+    private long lastTickNanos;
+    private final Runnable tick = new Runnable() {
+        @Override public void run() {
+            if (isFinishing()) return;
+            long now = System.nanoTime();
+            double dt = lastTickNanos == 0 ? 1.0 / 60.0 : Math.min((now - lastTickNanos) * 1.0e-9, 0.25);
+            lastTickNanos = now;
+            nativeUpdate(dt);
+            tickHandler.postDelayed(this, 16);
+        }
+    };
     private File moduleDir;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
@@ -23,11 +39,16 @@ public final class MainActivity extends Activity {
         moduleDir = new File(getFilesDir(), "modules");
         if (!moduleDir.exists()) moduleDir.mkdirs();
         copyBundledModules();
+        String abi = Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "arm64-v8a";
+        File pythonHome = new File(getFilesDir(), "python/" + abi);
+        copyBundledPython(abi, pythonHome);
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setPadding(32,32,32,32);
         TextView status = new TextView(this); status.setText("DreamEngine\nHot-swappable C++ modules + Python scripts"); status.setTextSize(20f);
         Button importButton = new Button(this); importButton.setText("Import modules from Downloads"); importButton.setOnClickListener(v -> pickModuleDirectory());
         root.addView(status); root.addView(importButton); setContentView(root);
-        nativeStart(moduleDir.getAbsolutePath());
+        nativeStart(moduleDir.getAbsolutePath(), pythonHome.getAbsolutePath());
+        lastTickNanos = System.nanoTime();
+        tickHandler.post(tick);
     }
     private void copyBundledModules() {
         try {
@@ -35,12 +56,34 @@ public final class MainActivity extends Activity {
             if (names == null) return;
             for (String name : names) {
                 File out = new File(moduleDir, name);
+                if (out.exists()) continue;
                 try (InputStream in = getAssets().open("modules/" + name); OutputStream os = new FileOutputStream(out)) {
                     byte[] b = new byte[8192]; int n; while ((n=in.read(b))!=-1) os.write(b,0,n);
                 }
             }
         } catch (IOException ignored) {}
     }
+
+    private void copyBundledPython(String abi, File destination) {
+        try {
+            if (destination.exists() && new File(destination, "pyvenv.cfg").exists()) return;
+            copyAssetTree("python/" + abi, destination);
+        } catch (IOException ignored) {}
+    }
+
+    private void copyAssetTree(String assetPath, File outDir) throws IOException {
+        if (!outDir.exists() && !outDir.mkdirs()) throw new IOException("Cannot create " + outDir);
+        String[] children = getAssets().list(assetPath);
+        if (children == null || children.length == 0) {
+            File out = new File(outDir, assetPath.substring(assetPath.lastIndexOf('/') + 1));
+            try (InputStream in = getAssets().open(assetPath); OutputStream os = new FileOutputStream(out)) {
+                byte[] b = new byte[16384]; int n; while ((n = in.read(b)) != -1) os.write(b, 0, n);
+            }
+            return;
+        }
+        for (String child : children) copyAssetTree(assetPath + "/" + child, new File(outDir, child));
+    }
+
     private void pickModuleDirectory() {
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
         i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
@@ -73,5 +116,5 @@ public final class MainActivity extends Activity {
         }
         c.close();
     }
-    @Override protected void onDestroy() { nativeStop(); super.onDestroy(); }
+    @Override protected void onDestroy() { tickHandler.removeCallbacks(tick); nativeStop(); super.onDestroy(); }
 }

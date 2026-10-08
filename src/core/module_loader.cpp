@@ -95,6 +95,12 @@ void ModuleLoader::shutdown() noexcept {
     loaded_.clear();
 }
 
+void ModuleLoader::update(double dt) noexcept {
+    for (auto& m : loaded_) {
+        if (m->module && m->module->update) m->module->update(m->module, dt);
+    }
+}
+
 std::size_t ModuleLoader::loaded_count() const noexcept { return loaded_.size(); }
 
 } // namespace dream
