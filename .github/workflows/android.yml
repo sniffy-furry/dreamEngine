@@ -12,19 +12,15 @@ permissions:
 
 jobs:
   build-android:
-    name: Build DreamEngine APK
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      # ─────────────────────────────────────────────
-      # Source
-      # ─────────────────────────────────────────────
+      # Checkout
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ─────────────────────────────────────────────
-      # Java
-      # ─────────────────────────────────────────────
+      # Java 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -32,42 +28,38 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # ─────────────────────────────────────────────
-      # Android SDK
-      # Automatically accepts Android SDK licenses
-      # ─────────────────────────────────────────────
+      # Android SDK + automatic license acceptance
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
-          packages: |
-            platform-tools
-            platforms;android-36
-            build-tools;36.0.0
-            cmake;3.31.6
-            ndk;27.2.12479018
 
-      # ─────────────────────────────────────────────
+      # Install required Android components
+      - name: Install Android SDK components
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "cmake;3.31.6" \
+            "ndk;27.2.12479018"
+
       # Gradle
-      # ─────────────────────────────────────────────
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.14"
 
-      # ─────────────────────────────────────────────
-      # Verify environment
-      # ─────────────────────────────────────────────
-      - name: Show build environment
+      # Environment information
+      - name: Verify Android environment
         run: |
           java -version
           gradle --version
           adb --version
-          sdkmanager --version
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
-      # ─────────────────────────────────────────────
-      # Build Debug APK
-      # ─────────────────────────────────────────────
+      # Debug APK
       - name: Build debug APK
         working-directory: android
         run: |
@@ -76,9 +68,7 @@ jobs:
             --stacktrace \
             --warning-mode all
 
-      # ─────────────────────────────────────────────
-      # Build Release APK
-      # ─────────────────────────────────────────────
+      # Release APK
       - name: Build release APK
         working-directory: android
         run: |
@@ -87,9 +77,7 @@ jobs:
             --stacktrace \
             --warning-mode all
 
-      # ─────────────────────────────────────────────
-      # Upload Debug APK
-      # ─────────────────────────────────────────────
+      # Debug artifact
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
@@ -97,9 +85,7 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      # ─────────────────────────────────────────────
-      # Upload Release APK
-      # ─────────────────────────────────────────────
+      # Release artifact
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
