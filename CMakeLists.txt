@@ -14,6 +14,8 @@ add_library(dream_engine_core STATIC
     src/core/module_loader.cpp
     src/core/registry.cpp
     src/core/python_scripting.cpp
+    src/core/log.cpp
+    src/core/properties.cpp
 )
 target_include_directories(dream_engine_core PUBLIC include)
 target_compile_features(dream_engine_core PUBLIC cxx_std_20)
@@ -22,6 +24,13 @@ if (MSVC)
     target_compile_options(dream_engine_core PRIVATE /W4 /permissive-)
 else()
     target_compile_options(dream_engine_core PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+option(DREAM_ENGINE_BUILD_RENDER_CUBE "Build render_cube module (needs GLES3 headers)" OFF)
+if(DREAM_ENGINE_BUILD_RENDER_CUBE)
+    add_library(render_cube_module SHARED modules/render_cube/render_cube.cpp)
+    target_include_directories(render_cube_module PRIVATE include)
+    set_target_properties(render_cube_module PROPERTIES PREFIX "" OUTPUT_NAME "render_cube")
 endif()
 
 if(DREAM_ENGINE_BUILD_TUTORIAL)

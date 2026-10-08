@@ -51,6 +51,12 @@ jobs:
         working-directory: android
         run: gradle :app:assembleRelease --no-daemon --stacktrace
 
+      - name: Upload compiled modules (.so)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DreamEngine-modules
+          path: android/app/src/main/assets/modules/*.so
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

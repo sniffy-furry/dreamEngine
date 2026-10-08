@@ -14,11 +14,33 @@ typedef struct DreamEngineModule DreamEngineModule;
 typedef void (*DreamLogFn)(int level, const char* message);
 typedef double (*DreamGetTimeFn)(void);
 
+// Properties: register once (strings), then use the uint32 handle every frame (no strings, no hashing).
+typedef struct DreamPropertyAPI {
+    uint32_t (*register_float)(const char* name, float def, float min, float max, const char* category);
+    uint32_t (*register_bool)(const char* name, int def, const char* category);
+    uint32_t (*find)(const char* name);          // 0xFFFFFFFF if missing
+    float (*get)(uint32_t id);
+    void (*set)(uint32_t id, float value);
+} DreamPropertyAPI;
+
+// UI model: describe panels; the engine/UI module decides how to draw them.
+typedef struct DreamUiAPI {
+    uint32_t (*panel)(const char* name);          // get-or-create
+    void (*slider)(uint32_t panel, uint32_t prop, const char* label_or_null);
+    void (*toggle)(uint32_t panel, uint32_t prop, const char* label_or_null);
+    void (*value)(uint32_t panel, uint32_t prop, const char* label_or_null);   // read-only readout
+    void (*label)(uint32_t panel, const char* text);
+    void (*query)(uint32_t panel, const char* module, const char* category, const char* tag); // NULL = any
+} DreamUiAPI;
+
+// New fields are only ever APPENDED, so modules built against older headers keep working.
 typedef struct DreamEngineHostAPI {
     uint32_t abi_version;
     void* user_data;
     DreamLogFn log;
     DreamGetTimeFn get_time_seconds;
+    const DreamPropertyAPI* props;
+    const DreamUiAPI* ui;
 } DreamEngineHostAPI;
 
 typedef struct DreamEngineModuleDescriptor {
@@ -34,6 +56,18 @@ typedef struct DreamEngineModule {
     void (*update)(DreamEngineModule* self, double dt);
     void (*shutdown)(DreamEngineModule* self);
 } DreamEngineModule;
+
+// OPTIONAL: a module that draws exports `dream_module_get_render`. All gl_* calls happen on the
+// engine thread with the GL context current (GLES 3.0).
+typedef struct DreamRenderModule DreamRenderModule;
+typedef struct DreamRenderModule {
+    void* user_data;
+    void (*gl_init)(DreamRenderModule* self, const DreamEngineHostAPI* host, int width, int height);
+    void (*gl_resize)(DreamRenderModule* self, int width, int height);
+    void (*gl_draw)(DreamRenderModule* self, double dt);
+    void (*gl_shutdown)(DreamRenderModule* self);
+} DreamRenderModule;
+typedef const DreamRenderModule* (*DreamModuleGetRenderFn)(void);
 
 typedef const DreamEngineModuleDescriptor* (*DreamModuleGetDescriptorFn)(void);
 typedef DreamEngineModule* (*DreamModuleCreateFn)(const DreamEngineHostAPI* host);
