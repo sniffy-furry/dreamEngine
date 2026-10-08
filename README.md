@@ -1,52 +1,17 @@
-# DreamEngine Core — v0.1
+# DreamEngine v0.5 — hot-swappable modules
 
-This is the first architectural foundation, not a finished graphics engine.
+The Android app keeps the core in the APK and loads native modules from its private `files/modules` directory.
+On first launch the default `tutorial.so` is copied from APK assets. The app has an **Import modules from Downloads** button using Android's document picker. Put `.so` and `.py` files in a folder such as `Download/DreamEngine/modules`, select that folder, then restart the app to activate native module replacements.
 
-## Design
+## Native module ABI
 
-The core is intentionally small:
-- Engine lifecycle
-- Module interface
-- Central service registry
-- Typed EventBus
-- Static module support suitable for Android
-- Tutorial module showing communication through the central API
+Modules export only these C ABI symbols:
+- `dream_module_get_descriptor`
+- `dream_module_create`
+- `dream_module_destroy`
 
-Modules do not depend directly on one another. They receive `EngineAPI`, then use shared services/events.
+ABI version is currently `1`. No STL, C++ classes, exceptions, or ownership cross the module boundary.
 
-## Why this structure
+## Python
 
-For Android we want the hot path to stay native C++ and avoid filesystem IPC or JSON between modules. The central API is an in-memory interface.
-
-Future modules can include:
-- Vulkan renderer
-- render graph
-- ECS
-- physics
-- audio
-- input
-- UI
-- asset/streaming system
-- Python scripting
-- SNN/AI
-- networking
-- profiler
-
-## Graphics target
-
-The architecture does not promise "Forza-level" graphics by itself. Achieving that class of visuals requires a serious renderer, physically based materials, HDR, modern shadows, temporal reconstruction, streaming, LODs, animation, post-processing, GPU profiling, and high-quality assets.
-
-The renderer should therefore be added as a separate module rather than polluting the core.
-
-
-## Android
-
-The repository now contains an Android application under `android/`.
-
-- Native engine core is compiled with the Android NDK.
-- JNI bridge exposes the native engine to the Android Activity.
-- ARM64 (`arm64-v8a`) and x86_64 are enabled.
-- GitHub Actions builds debug and release APK artifacts.
-- The renderer is intentionally not implemented yet; the next graphics layer should be a Vulkan module.
-
-The Android build keeps the game/engine hot path in C++ rather than moving engine logic into Kotlin.
+`.py` files are accepted and indexed by the engine in the same hot-swap directory. The `PythonScriptManager` is deliberately isolated from the native module ABI so an embedded CPython runtime can be enabled later without changing the module ABI. This build does **not** claim to execute Python yet; it discovers scripts and keeps their paths ready for the Python runtime layer.

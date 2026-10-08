@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(DREAM_ENGINE_BUILD_TUTORIAL "Build tutorial module" ON)
+option(DREAM_ENGINE_BUILD_TUTORIAL "Build tutorial module" OFF)
 
 add_library(dream_engine_core STATIC
     src/core/engine.cpp
@@ -13,6 +13,7 @@ add_library(dream_engine_core STATIC
     src/core/module.cpp
     src/core/module_loader.cpp
     src/core/registry.cpp
+    src/core/python_scripting.cpp
 )
 target_include_directories(dream_engine_core PUBLIC include)
 target_compile_features(dream_engine_core PUBLIC cxx_std_20)
@@ -28,4 +29,4 @@ if(DREAM_ENGINE_BUILD_TUTORIAL)
 endif()
 
 add_executable(engine_demo examples/main.cpp)
-target_link_libraries(engine_demo PRIVATE dream_engine_core tutorial_module)
+target_link_libraries(engine_demo PRIVATE dream_engine_core)

@@ -1,36 +1,47 @@
-#include "tutorial_module.hpp"
-#include "dream/core/engine.hpp"
-#include <iostream>
+#include "dream/core/module_api.h"
+#include <cstdio>
+#include <cstdlib>
+#include <android/log.h>
 
-namespace dream::tutorial {
+struct TutorialState { double elapsed = 0.0; const DreamEngineHostAPI* host = nullptr; };
 
-const char* TutorialModule::name() const noexcept {
-    return "tutorial";
+static const DreamEngineModuleDescriptor kDescriptor{
+    DREAM_ENGINE_MODULE_ABI_VERSION, 1u, "tutorial", "DreamEngine Tutorial"
+};
+
+static int initialize(DreamEngineModule* self, const DreamEngineHostAPI* host) {
+    auto* s = static_cast<TutorialState*>(self->user_data);
+    s->host = host;
+    if (host && host->log) host->log(ANDROID_LOG_INFO, "tutorial module initialized");
+    return 1;
 }
-
-bool TutorialModule::initialize(EngineAPI& api) {
-    api_ = &api;
-    std::cout << "[tutorial] initialized\n";
-    return true;
-}
-
-void TutorialModule::update(double dt) {
-    elapsed_ += dt;
-
-    // Deliberately tiny demo: modules communicate through the central EventBus.
-    if (api_ && elapsed_ >= 1.0) {
-        api_->events().publish(TutorialTick{dt, elapsed_});
-        elapsed_ -= 1.0;
+static void update(DreamEngineModule* self, double dt) {
+    auto* s = static_cast<TutorialState*>(self->user_data);
+    s->elapsed += dt;
+    if (s->elapsed >= 1.0) {
+        s->elapsed -= 1.0;
+        if (s->host && s->host->log) s->host->log(ANDROID_LOG_INFO, "tutorial tick");
     }
 }
-
-void TutorialModule::shutdown() noexcept {
-    std::cout << "[tutorial] shutdown\n";
-    api_ = nullptr;
+static void shutdown(DreamEngineModule* self) {
+    auto* s = static_cast<TutorialState*>(self->user_data);
+    if (s->host && s->host->log) s->host->log(ANDROID_LOG_INFO, "tutorial module shutdown");
+    s->host = nullptr;
 }
 
-std::unique_ptr<IEngineModule> create() {
-    return std::make_unique<TutorialModule>();
+extern "C" DREAM_MODULE_EXPORT const DreamEngineModuleDescriptor* dream_module_get_descriptor() { return &kDescriptor; }
+extern "C" DREAM_MODULE_EXPORT DreamEngineModule* dream_module_create(const DreamEngineHostAPI* host) {
+    auto* state = new TutorialState{};
+    auto* module = new DreamEngineModule{};
+    module->user_data = state;
+    module->initialize = initialize;
+    module->update = update;
+    module->shutdown = shutdown;
+    if (host) state->host = host;
+    return module;
 }
-
-} // namespace dream::tutorial
+extern "C" DREAM_MODULE_EXPORT void dream_module_destroy(DreamEngineModule* module) {
+    if (!module) return;
+    delete static_cast<TutorialState*>(module->user_data);
+    delete module;
+}

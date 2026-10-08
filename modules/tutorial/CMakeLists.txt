@@ -1,5 +1,4 @@
-add_library(tutorial_module STATIC
-    tutorial_module.cpp
-)
-target_include_directories(tutorial_module PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(tutorial_module PUBLIC dream_engine_core)
+add_library(tutorial_module SHARED tutorial_module.cpp)
+target_include_directories(tutorial_module PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_compile_features(tutorial_module PRIVATE cxx_std_20)
+set_target_properties(tutorial_module PROPERTIES PREFIX "" OUTPUT_NAME "tutorial")
