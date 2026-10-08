@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.graphics.*;
 import android.graphics.drawable.ColorDrawable;
+import android.widget.FrameLayout;
 import android.view.*;
 import android.view.TextureView.SurfaceTextureListener;
 import java.io.*;
@@ -265,6 +266,8 @@ public final class MainActivity extends Activity {
         }
 
         private void drawInspector(Canvas c,float y){
+            int w = getWidth();
+            int h = getHeight();
             if(selectedIndex<0){ text(c,"No GameObject selected",w-rightW+16,y+16,13,Color.GRAY); return; }
             String[] ls=inspector.split("\\n");
             float yy=y;
