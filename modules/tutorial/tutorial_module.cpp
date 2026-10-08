@@ -1,12 +1,8 @@
 #include "tutorial_module.hpp"
+#include "dream/core/engine.hpp"
 #include <iostream>
 
 namespace dream::tutorial {
-
-struct TutorialTick {
-    double dt;
-    double elapsed;
-};
 
 const char* TutorialModule::name() const noexcept {
     return "tutorial";
@@ -23,8 +19,8 @@ void TutorialModule::update(double dt) {
 
     // Deliberately tiny demo: modules communicate through the central EventBus.
     if (api_ && elapsed_ >= 1.0) {
-        api_->events().publish(TutorialTick{elapsed_, elapsed_});
-        elapsed_ = 0.0;
+        api_->events().publish(TutorialTick{dt, elapsed_});
+        elapsed_ -= 1.0;
     }
 }
 

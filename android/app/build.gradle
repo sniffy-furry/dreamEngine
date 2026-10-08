@@ -5,6 +5,7 @@ plugins {
 android {
     namespace 'com.dreamingbully.dreamengine'
     compileSdk 36
+    ndkVersion '27.2.12479018'
 
     defaultConfig {
         applicationId 'com.dreamingbully.dreamengine'
@@ -15,7 +16,7 @@ android {
 
         externalNativeBuild {
             cmake {
-                cppFlags '-std=c++20', '-O3', '-DNDEBUG'
+                cppFlags '-std=c++20'
                 arguments '-DANDROID_STL=c++_shared'
             }
         }
@@ -29,7 +30,7 @@ android {
         debug {
             externalNativeBuild {
                 cmake {
-                    cppFlags '-std=c++20', '-O0', '-g'
+                    cppFlags '-std=c++20'
                 }
             }
         }

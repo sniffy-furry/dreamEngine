@@ -4,6 +4,11 @@
 
 namespace dream::tutorial {
 
+struct TutorialTick {
+    double dt;
+    double elapsed;
+};
+
 class TutorialModule final : public IEngineModule {
 public:
     const char* name() const noexcept override;
