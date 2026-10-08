@@ -3,11 +3,13 @@ import dream
 
 p = dream.props
 grav = p.register("world.gravity", float, 9.8, 0, 30, category="Physics", tags=["debug"])
+wire = p.register("render.wireframe", bool, False, category="Render", tags=["debug"])
+fov = p.register("render.fov", float, 70, 30, 120, category="Render")
 fps = p.register("stats.fps", float, 0, 0, 1000, category="Stats")
 
 dream.ui.panel("World").label("Physics settings").query(category="Physics")
+dream.ui.panel("Render").query(module="render")        # every render.* setting
 dream.ui.panel("Debug").label("tagged 'debug' only").query(tag="debug").value(fps, "FPS")
-# The "Render" panel (fov / wireframe / spin / distance) is declared by the render_cube module itself.
 
 
 def on_update(dt):

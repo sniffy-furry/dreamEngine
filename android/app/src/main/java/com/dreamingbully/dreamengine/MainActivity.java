@@ -22,13 +22,6 @@ public final class MainActivity extends Activity {
     private static native void nativeUpdate(double dt);
     private static native void nativeReload();
     private static native String nativeDrainLog();
-    private static native void nativeSurfaceChanged(android.view.Surface surface, int w, int h);
-    private static native void nativeSurfaceDestroyed();
-    private static native void nativeRender(double dt);
-    private static native int nativeUiRevision();
-    private static native String nativeUiLayout();
-    private static native float nativeGetProp(int id);
-    private static native void nativeSetProp(int id, float v);
     private final Handler tickHandler = new Handler(Looper.getMainLooper());
     private long lastTickNanos;
     private final Runnable tick = new Runnable() {
@@ -38,8 +31,7 @@ public final class MainActivity extends Activity {
             double dt = lastTickNanos == 0 ? 1.0 / 60.0 : Math.min((now - lastTickNanos) * 1.0e-9, 0.25);
             lastTickNanos = now;
             nativeUpdate(dt);
-            nativeRender(dt);
-            if (++logTicks % 30 == 0) { appendLog(nativeDrainLog()); syncUi(); }
+            if (++logTicks % 30 == 0) appendLog(nativeDrainLog());
             tickHandler.postDelayed(this, 16);
         }
     };
@@ -76,19 +68,11 @@ public final class MainActivity extends Activity {
         Button importButton = new Button(this); importButton.setText("Import modules from Downloads"); importButton.setOnClickListener(v -> pickModuleDirectory());
         logView = new TextView(this); logView.setTextSize(11f); logView.setTypeface(android.graphics.Typeface.MONOSPACE);
         logScroll = new android.widget.ScrollView(this); logScroll.addView(logView);
-        tabBar = new LinearLayout(this); tabBar.setOrientation(LinearLayout.HORIZONTAL);
-        android.widget.HorizontalScrollView tabScroll = new android.widget.HorizontalScrollView(this); tabScroll.addView(tabBar);
-        panelBox = new LinearLayout(this); panelBox.setOrientation(LinearLayout.VERTICAL);
-        android.widget.ScrollView panelScroll = new android.widget.ScrollView(this); panelScroll.addView(panelBox);
-        root.addView(status); root.addView(importButton); root.addView(tabScroll);
-        root.addView(panelScroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        root.addView(status); root.addView(importButton);
         root.addView(logScroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
-        split.addView(surfaceView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-        split.addView(root, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-        setContentView(split);
+        setContentView(root);
         nativeStart(moduleDir.getAbsolutePath(), pythonHome.getAbsolutePath());
         appendLog(nativeDrainLog());
-        syncUi();
         lastTickNanos = System.nanoTime();
         tickHandler.post(tick);
     }
@@ -233,7 +217,6 @@ public final class MainActivity extends Activity {
         appendLog("imported " + copied + " file(s) (.py/.so, searched all subfolders)\n");
         if (copied > 0) nativeReload();   // live hot-swap, no restart needed
         appendLog(nativeDrainLog());
-        syncUi();
     }
     private int copyFromTree(Uri tree) {
         return walkTree(tree, android.provider.DocumentsContract.getTreeDocumentId(tree), 0);

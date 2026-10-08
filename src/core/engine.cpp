@@ -106,7 +106,6 @@ bool Engine::load_external_modules(const std::string& directory) {
 bool Engine::reload_modules(const std::string& directory) {
     // Live hot-swap: no app restart needed.
     python_scripts_.unload();
-    ui_.clear();   // panels are rebuilt by the reloaded modules; property values are kept
     const bool native_ok = load_external_modules(directory);   // dlcloses old .so, dlopens new
     const bool py_ok = python_scripts_.running() ? python_scripts_.run_directory(directory) : false;
     log_push(4, "reload done: native modules=" + std::to_string(module_loader_.loaded_count()) +
