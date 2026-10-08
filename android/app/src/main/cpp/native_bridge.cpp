@@ -40,26 +40,6 @@ Java_com_dreamingbully_dreamengine_MainActivity_nativeDrainLog(JNIEnv* env, jcla
     return env->NewStringUTF(dream::log_drain().c_str());
 }
 
-extern "C" JNIEXPORT jint JNICALL
-Java_com_dreamingbully_dreamengine_MainActivity_nativeUiRevision(JNIEnv*, jclass) {
-    return g_engine ? static_cast<jint>(g_engine->ui().layout_revision()) : 0;
-}
-
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_dreamingbully_dreamengine_MainActivity_nativeUiLayout(JNIEnv* env, jclass) {
-    return env->NewStringUTF(g_engine ? g_engine->ui().describe(g_engine->props()).c_str() : "");
-}
-
-extern "C" JNIEXPORT jfloat JNICALL
-Java_com_dreamingbully_dreamengine_MainActivity_nativeGetProp(JNIEnv*, jclass, jint id) {
-    return g_engine ? g_engine->props().get(static_cast<dream::PropId>(id)) : 0.f;
-}
-
-extern "C" JNIEXPORT void JNICALL
-Java_com_dreamingbully_dreamengine_MainActivity_nativeSetProp(JNIEnv*, jclass, jint id, jfloat v) {
-    if (g_engine) g_engine->props().set(static_cast<dream::PropId>(id), v);
-}
-
 extern "C" JNIEXPORT void JNICALL
 Java_com_dreamingbully_dreamengine_MainActivity_nativeUpdate(JNIEnv*, jclass, jdouble dt) {
     if (g_engine) g_engine->update(static_cast<double>(dt));

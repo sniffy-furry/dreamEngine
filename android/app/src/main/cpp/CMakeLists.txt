@@ -13,6 +13,7 @@ add_library(dream_engine_core STATIC
     "${ENGINE_ROOT}/src/core/python_scripting.cpp"
     "${ENGINE_ROOT}/src/core/log.cpp"
     "${ENGINE_ROOT}/src/core/properties.cpp")
+    "${ENGINE_ROOT}/src/core/log.cpp")
 target_include_directories(dream_engine_core PUBLIC "${ENGINE_ROOT}/include")
 add_library(tutorial_module SHARED "${ENGINE_ROOT}/modules/tutorial/tutorial_module.cpp")
 target_include_directories(tutorial_module PRIVATE "${ENGINE_ROOT}/include")
