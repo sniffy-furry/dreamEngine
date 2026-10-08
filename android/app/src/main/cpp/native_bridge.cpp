@@ -27,12 +27,12 @@ void stop() {
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_dreamingbully_dreamengine_MainActivity_nativeStart(
-        JNIEnv*, jobject) {
+        JNIEnv*, jclass) {
     start();
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_dreamingbully_dreamengine_MainActivity_nativeStop(
-        JNIEnv*, jobject) {
+        JNIEnv*, jclass) {
     stop();
 }
