@@ -3,6 +3,7 @@
 #include <EGL/egl.h>
 #include <memory>
 #include <string>
+#include <cstring>
 #include "dream/core/engine.hpp"
 #include "dream/core/log.hpp"
 #include "dream/editor/editor.hpp"
@@ -176,6 +177,25 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorIsPlaying(JNIEnv*, jclass) {
     return g_editor && g_editor->state().playing ? JNI_TRUE : JNI_FALSE;
 }
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorAddComponent(JNIEnv* env, jclass, jstring kind) {
+    if (!g_editor || !kind) return JNI_FALSE;
+    const char* k = env->GetStringUTFChars(kind, nullptr);
+    if (!k) return JNI_FALSE;
+    const auto e = g_editor->state().selection.entity;
+    bool ok = g_editor->scene().world.alive(e);
+    if (ok) {
+        if (std::strcmp(k, "camera") == 0) g_editor->scene().world.add_camera(e);
+        else if (std::strcmp(k, "light") == 0) g_editor->scene().world.add_light(e);
+        else if (std::strcmp(k, "mesh") == 0) g_editor->scene().world.add_mesh(e);
+        else ok = false;
+        if (ok) g_editor->state().dirty = true;
+    }
+    env->ReleaseStringUTFChars(kind, k);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorMove(JNIEnv*, jclass, jfloat dx, jfloat dy, jfloat dz) {
     if (!g_editor) return JNI_FALSE;
@@ -184,7 +204,26 @@ Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorMove(JNIEnv*, jclass
     if (!t) return JNI_FALSE;
     t->px += dx; t->py += dy; t->pz += dz;
     g_editor->state().dirty = true;
+    auto set_prop = [&](const char* name, float value) {
+        const auto id = g_engine ? g_engine->props().find(name) : dream::kInvalidProp;
+        if (g_engine && id != dream::kInvalidProp) g_engine->props().set(id, value);
+    };
+    set_prop("editor.object.x", t->px);
+    set_prop("editor.object.y", t->py);
+    set_prop("editor.object.z", t->pz);
     return JNI_TRUE;
+}
+
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_dreamingbully_dreamengine_MainActivity_nativeSetNamedProp(JNIEnv* env, jclass, jstring name, jfloat value) {
+    if (!g_engine || !name) return;
+    const char* n = env->GetStringUTFChars(name, nullptr);
+    if (n) {
+        const auto id = g_engine->props().find(n);
+        if (id != dream::kInvalidProp) g_engine->props().set(id, value);
+        env->ReleaseStringUTFChars(name, n);
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL

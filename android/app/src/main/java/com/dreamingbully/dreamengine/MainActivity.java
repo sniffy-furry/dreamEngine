@@ -40,12 +40,16 @@ public final class MainActivity extends Activity {
     private static native void nativeEditorSetPlaying(boolean playing);
     private static native boolean nativeEditorIsPlaying();
     private static native boolean nativeEditorMove(float dx, float dy, float dz);
+    private static native boolean nativeEditorAddComponent(String kind);
+    private static native void nativeSetNamedProp(String name, float value);
 
     private final Handler tickHandler = new Handler(Looper.getMainLooper());
     private long lastTickNanos;
     private File moduleDir;
     private EditorView editorView;
     private String logText = "";
+    private Surface pendingSurface;
+    private int pendingSurfaceW, pendingSurfaceH;
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
@@ -75,6 +79,12 @@ public final class MainActivity extends Activity {
         File pythonHome = new File(getFilesDir(), "python/" + abi);
         copyBundledPython(abi, pythonHome);
 
+        // Start the native engine BEFORE attaching the TextureView. TextureView may report
+        // onSurfaceTextureAvailable immediately; starting afterwards used to lose that first
+        // callback, leaving the GL surface uninitialized and the 3D viewport black.
+        nativeStart(moduleDir.getAbsolutePath(), pythonHome.getAbsolutePath());
+        appendLog(nativeDrainLog());
+
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(30, 30, 32));
 
@@ -82,7 +92,9 @@ public final class MainActivity extends Activity {
         viewport.setOpaque(true);
         viewport.setSurfaceTextureListener(new SurfaceTextureListener() {
             @Override public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) {
-                nativeSurfaceChanged(new Surface(st), w, h);
+                pendingSurface = new Surface(st);
+                pendingSurfaceW = w; pendingSurfaceH = h;
+                nativeSurfaceChanged(pendingSurface, w, h);
             }
             @Override public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) {
                 nativeSurfaceChanged(new Surface(st), w, h);
@@ -99,8 +111,6 @@ public final class MainActivity extends Activity {
         root.addView(editorView, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
 
-        nativeStart(moduleDir.getAbsolutePath(), pythonHome.getAbsolutePath());
-        appendLog(nativeDrainLog());
         editorView.refreshData();
         lastTickNanos = System.nanoTime();
         tickHandler.post(tick);
@@ -134,6 +144,8 @@ public final class MainActivity extends Activity {
         private boolean draggingViewport;
         private int tool = 0; // 0 select, 1 move, 2 rotate, 3 scale
         private int bottomTab = 0; // project / console / profiler
+        private float cameraYaw = 0f, cameraPitch = 0f;
+        private float objectYaw = 0f, objectPitch = 0f, objectScale = 1f;
         private int pressedAction = -1;
 
         private final int topH = 64;
@@ -300,17 +312,48 @@ public final class MainActivity extends Activity {
                 downX=x;downY=y;draggingViewport=hit(x,y,leftW,topH+toolbarH,getWidth()-rightW,getHeight()-bottomH);return true;
             }
             if(e.getAction()==MotionEvent.ACTION_MOVE && draggingViewport){
-                if(tool==1){ nativeEditorMove((x-downX)*0.01f,(downY-y)*0.01f,0); downX=x;downY=y; refreshData(); }
+                float dx=x-downX, dy=y-downY;
+                if(tool==1){
+                    nativeEditorMove(dx*0.01f,(downY-y)*0.01f,0);
+                    downX=x; downY=y; refreshData();
+                } else if(tool==2){
+                    objectYaw += dx*0.8f; objectPitch += dy*0.8f;
+                    nativeSetNamedProp("editor.object.yaw", objectYaw);
+                    nativeSetNamedProp("editor.object.pitch", objectPitch);
+                    downX=x; downY=y;
+                } else if(tool==3){
+                    objectScale = Math.max(0.25f, Math.min(3.0f, objectScale-dy*0.01f));
+                    nativeSetNamedProp("editor.object.scale", objectScale);
+                    downX=x; downY=y;
+                } else {
+                    cameraYaw += dx*0.6f; cameraPitch += dy*0.45f;
+                    cameraYaw = Math.max(-180f, Math.min(180f, cameraYaw));
+                    cameraPitch = Math.max(-80f, Math.min(80f, cameraPitch));
+                    nativeSetNamedProp("editor.camera.yaw", cameraYaw);
+                    nativeSetNamedProp("editor.camera.pitch", cameraPitch);
+                    downX=x; downY=y;
+                }
                 return true;
             }
             if(e.getAction()!=MotionEvent.ACTION_UP)return true;
+
+            // Top menu commands. These are deliberately real commands rather than decorative text.
+            if(y>=0 && y<topH){
+                if(hit(x,y,150,0,215,topH)){ saveScene(); return true; }
+                if(hit(x,y,215,0,275,topH)){ nativeEditorDelete(); refreshData(); return true; }
+                if(hit(x,y,275,0,335,topH)){ importModules(); return true; }
+                if(hit(x,y,335,0,430,topH)){ nativeEditorCreate("entity"); refreshData(); return true; }
+                if(hit(x,y,430,0,535,topH)){ nativeEditorAddComponent("mesh"); refreshData(); return true; }
+                if(hit(x,y,535,0,620,topH)){ bottomTab=(bottomTab+1)%3; invalidate(); return true; }
+                if(hit(x,y,620,0,690,topH)){ appendLog("DreamEngine Editor: File/Edit/Assets/GameObject/Component commands ready\n"); bottomTab=1; invalidate(); return true; }
+            }
 
             if(hit(x,y,18,topH+8,70,topH+44)){nativeEditorSetPlaying(!nativeEditorIsPlaying());invalidate();return true;}
             if(hit(x,y,76,topH+8,128,topH+44)){nativeEditorSetPlaying(false);invalidate();return true;}
             if(hit(x,y,145,topH+8,192,topH+44)){tool=1;invalidate();return true;}
             if(hit(x,y,194,topH+8,242,topH+44)){tool=2;invalidate();return true;}
             if(hit(x,y,244,topH+8,292,topH+44)){tool=3;invalidate();return true;}
-            if(hit(x,y,540,topH+8,582,topH+44)){nativeEditorCreate("entity");refreshData();return true;}
+            if(hit(x,y,540,topH+8,582,topH+44)){nativeEditorCreate("entity");objectYaw=objectPitch=0f;objectScale=1f;nativeSetNamedProp("editor.object.yaw",0);nativeSetNamedProp("editor.object.pitch",0);nativeSetNamedProp("editor.object.scale",1);refreshData();return true;}
             if(hit(x,y,588,topH+8,646,topH+44)){nativeEditorCreate("camera");refreshData();return true;}
             if(hit(x,y,652,topH+8,710,topH+44)){nativeEditorCreate("light");refreshData();return true;}
             if(hit(x,y,716,topH+8,774,topH+44)){nativeEditorDelete();refreshData();return true;}
@@ -318,6 +361,9 @@ public final class MainActivity extends Activity {
             if(hit(x,y,850,topH+8,928,topH+44)){importModules();return true;}
             if(hit(x,y,0,topH+toolbarH,leftW,getHeight()-bottomH)){
                 int row=(int)((y-(topH+toolbarH+26))/29); if(row>=0){String[] ls=hierarchy.split("\\n");if(row<ls.length){try{String clean=ls[row].replace("*","").trim();int sp=clean.indexOf(' ');int idx=Integer.parseInt(sp<0?clean:clean.substring(0,sp));if(nativeEditorSelect(idx))refreshData();}catch(Exception ignored){}}} return true;
+            }
+            if(hit(x,y,getWidth()-rightW+12,getHeight()-bottomH-45,getWidth()-12,getHeight()-bottomH-3)){
+                nativeEditorAddComponent("mesh"); refreshData(); return true;
             }
             if(hit(x,y,0,getHeight()-bottomH,getWidth(),getHeight())){
                 if(y>getHeight()-bottomH+5 && y<getHeight()-bottomH+45){if(x<105)bottomTab=0;else if(x<210)bottomTab=1;else bottomTab=2;invalidate();return true;}

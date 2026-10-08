@@ -9,9 +9,10 @@ namespace {
 
 const DreamEngineHostAPI* g_host = nullptr;
 uint32_t p_fov, p_wire, p_spin, p_dist;
+uint32_t p_cam_yaw, p_cam_pitch, p_obj_x, p_obj_y, p_obj_z, p_obj_yaw, p_obj_pitch, p_obj_scale;
 float g_angle = 0.f;
 int g_w = 1, g_h = 1;
-GLuint g_prog = 0, g_vao = 0, g_vbo = 0, g_ibo_tri = 0, g_ibo_line = 0;
+GLuint g_prog = 0, g_vao = 0, g_vbo = 0, g_ibo_tri = 0, g_ibo_line = 0, g_grid_vao = 0, g_grid_vbo = 0;
 GLint g_loc_mvp = -1;
 
 const char* kVS = R"(#version 300 es
@@ -69,6 +70,14 @@ int mod_init(DreamEngineModule*, const DreamEngineHostAPI* host) {
     p_wire = host->props->register_bool("render.wireframe", 0, "Render");
     p_spin = host->props->register_float("render.spin", 1.f, 0.f, 5.f, "Render");
     p_dist = host->props->register_float("render.distance", 4.f, 2.f, 12.f, "Render");
+    p_cam_yaw = host->props->register_float("editor.camera.yaw", 0.f, -180.f, 180.f, "Editor Camera");
+    p_cam_pitch = host->props->register_float("editor.camera.pitch", 0.f, -80.f, 80.f, "Editor Camera");
+    p_obj_x = host->props->register_float("editor.object.x", 0.f, -20.f, 20.f, "Selected Object");
+    p_obj_y = host->props->register_float("editor.object.y", 0.f, -20.f, 20.f, "Selected Object");
+    p_obj_z = host->props->register_float("editor.object.z", 0.f, -20.f, 20.f, "Selected Object");
+    p_obj_yaw = host->props->register_float("editor.object.yaw", 0.f, -360.f, 360.f, "Selected Object");
+    p_obj_pitch = host->props->register_float("editor.object.pitch", 0.f, -360.f, 360.f, "Selected Object");
+    p_obj_scale = host->props->register_float("editor.object.scale", 1.f, 0.25f, 3.f, "Selected Object");
     const uint32_t panel = host->ui->panel("Render");
     host->ui->query(panel, "render", nullptr, nullptr);   // every render.* property
     return 1;
@@ -107,6 +116,24 @@ void gl_init(DreamRenderModule*, const DreamEngineHostAPI*, int w, int h) {
     glGenBuffers(1, &g_ibo_line); glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_ibo_line);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof line, line, GL_STATIC_DRAW);
     glBindVertexArray(0);
+
+    // Editor ground grid: 20x20 lines with a slightly brighter central axis.
+    float grid[21 * 21 * 2 * 6];
+    int gi = 0;
+    for (int i = -10; i <= 10; ++i) {
+        const float a = static_cast<float>(i);
+        const float c = (i == 0) ? 0.65f : 0.22f;
+        grid[gi++] = -10.f; grid[gi++] = 0.f; grid[gi++] = a; grid[gi++] = c; grid[gi++] = c; grid[gi++] = c;
+        grid[gi++] =  10.f; grid[gi++] = 0.f; grid[gi++] = a; grid[gi++] = c; grid[gi++] = c; grid[gi++] = c;
+        grid[gi++] = a; grid[gi++] = 0.f; grid[gi++] = -10.f; grid[gi++] = c; grid[gi++] = c; grid[gi++] = c;
+        grid[gi++] = a; grid[gi++] = 0.f; grid[gi++] =  10.f; grid[gi++] = c; grid[gi++] = c; grid[gi++] = c;
+    }
+    glGenVertexArrays(1, &g_grid_vao); glBindVertexArray(g_grid_vao);
+    glGenBuffers(1, &g_grid_vbo); glBindBuffer(GL_ARRAY_BUFFER, g_grid_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(grid), grid, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0); glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 24, (void*)0);
+    glEnableVertexAttribArray(1); glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 24, (void*)12);
+    glBindVertexArray(0);
     glEnable(GL_DEPTH_TEST);
 }
 void gl_resize(DreamRenderModule*, int w, int h) { g_w = w; g_h = h; }
@@ -117,10 +144,27 @@ void gl_draw(DreamRenderModule*, double) {
     const auto* P = g_host->props;
     M4 proj, view, ry, rx, model, vp, mvp;
     perspective(proj, P->get(p_fov), static_cast<float>(g_w) / static_cast<float>(g_h > 0 ? g_h : 1), 0.1f, 50.f);
-    translate(view, 0.f, 0.f, -P->get(p_dist));
-    rot_y(ry, g_angle); rot_x(rx, g_angle * 0.6f);
-    mul(model, rx, ry); mul(vp, proj, view); mul(mvp, vp, model);
+    M4 camY, camX, tr;
+    rot_y(camY, -P->get(p_cam_yaw) * 3.14159265f / 180.f);
+    rot_x(camX, -P->get(p_cam_pitch) * 3.14159265f / 180.f);
+    translate(tr, 0.f, 0.f, -P->get(p_dist));
+    mul(view, camX, camY); mul(view, view, tr);
+    rot_y(ry, (g_angle + P->get(p_obj_yaw) * 3.14159265f / 180.f));
+    rot_x(rx, (g_angle * 0.6f + P->get(p_obj_pitch) * 3.14159265f / 180.f));
+    mul(model, rx, ry);
+    model[12] = P->get(p_obj_x); model[13] = P->get(p_obj_y); model[14] = P->get(p_obj_z);
+    model[0] *= P->get(p_obj_scale); model[1] *= P->get(p_obj_scale); model[2] *= P->get(p_obj_scale);
+    model[4] *= P->get(p_obj_scale); model[5] *= P->get(p_obj_scale); model[6] *= P->get(p_obj_scale);
+    model[8] *= P->get(p_obj_scale); model[9] *= P->get(p_obj_scale); model[10] *= P->get(p_obj_scale); mul(vp, proj, view); mul(mvp, vp, model);
     glUseProgram(g_prog);
+    // Draw the editor grid on the XZ plane.
+    M4 gridModel, gridMvp; ident(gridModel); gridModel[13] = -1.35f;
+    mul(gridMvp, vp, gridModel);
+    glUniformMatrix4fv(g_loc_mvp, 1, GL_FALSE, gridMvp);
+    glBindVertexArray(g_grid_vao);
+    glDrawArrays(GL_LINES, 0, 84);
+
+    // Draw the selected object preview.
     glUniformMatrix4fv(g_loc_mvp, 1, GL_FALSE, mvp);
     glBindVertexArray(g_vao);
     if (P->get(p_wire) != 0.f) {
@@ -138,7 +182,9 @@ void gl_shutdown(DreamRenderModule*) {
     if (g_ibo_tri) glDeleteBuffers(1, &g_ibo_tri);
     if (g_ibo_line) glDeleteBuffers(1, &g_ibo_line);
     if (g_vao) glDeleteVertexArrays(1, &g_vao);
-    g_prog = g_vbo = g_ibo_tri = g_ibo_line = g_vao = 0;
+    if (g_grid_vbo) glDeleteBuffers(1, &g_grid_vbo);
+    if (g_grid_vao) glDeleteVertexArrays(1, &g_grid_vao);
+    g_prog = g_vbo = g_ibo_tri = g_ibo_line = g_vao = g_grid_vbo = g_grid_vao = 0;
 }
 DreamRenderModule g_render = {nullptr, gl_init, gl_resize, gl_draw, gl_shutdown};
 
