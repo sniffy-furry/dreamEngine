@@ -1,0 +1,8 @@
+{
+  "format":1,
+  "name":"Main",
+  "entities":[
+    {"index":0,"generation":1,"transform":[0,0,0,0,0,0,1,1,1]},
+    {"index":1,"generation":1,"transform":[0,0,-4,0,0,0,1,1,1],"camera":[70,0.1,1000]}
+  ]
+}

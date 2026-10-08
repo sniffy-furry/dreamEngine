@@ -16,6 +16,12 @@ add_library(dream_engine_core STATIC
     src/core/python_scripting.cpp
     src/core/log.cpp
     src/core/properties.cpp
+    src/ecs/ecs.cpp
+    src/scene/scene.cpp
+    src/editor/editor.cpp
+    src/graphics/gles_device.cpp
+    src/assets/assets.cpp
+    src/project/project.cpp
 )
 target_include_directories(dream_engine_core PUBLIC include)
 target_compile_features(dream_engine_core PUBLIC cxx_std_20)
@@ -38,4 +44,6 @@ if(DREAM_ENGINE_BUILD_TUTORIAL)
 endif()
 
 add_executable(engine_demo examples/main.cpp)
+add_executable(phase234_tests tests/phase234_tests.cpp)
+target_link_libraries(phase234_tests PRIVATE dream_engine_core)
 target_link_libraries(engine_demo PRIVATE dream_engine_core)

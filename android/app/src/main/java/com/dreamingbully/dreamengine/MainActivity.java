@@ -29,6 +29,12 @@ public final class MainActivity extends Activity {
     private static native String nativeUiLayout();
     private static native float nativeGetProp(int id);
     private static native void nativeSetProp(int id, float v);
+    private static native String nativeEditorHierarchy();
+    private static native String nativeEditorInspector();
+    private static native int nativeEditorCreate(String kind);
+    private static native boolean nativeEditorSelect(int index);
+    private static native boolean nativeEditorDelete();
+    private static native boolean nativeEditorSave(String path);
     private final Handler tickHandler = new Handler(Looper.getMainLooper());
     private long lastTickNanos;
     private final Runnable tick = new Runnable() {
@@ -39,13 +45,14 @@ public final class MainActivity extends Activity {
             lastTickNanos = now;
             nativeUpdate(dt);
             nativeRender(dt);
-            if (++logTicks % 30 == 0) { appendLog(nativeDrainLog()); syncUi(); }
+            if (++logTicks % 30 == 0) { appendLog(nativeDrainLog()); syncUi(); refreshEditor(); }
             tickHandler.postDelayed(this, 16);
         }
     };
     private File moduleDir;
     private int logTicks;
     private TextView logView;
+    private TextView hierarchyView, inspectorView;
     private android.widget.ScrollView logScroll;
     private final StringBuilder logText = new StringBuilder();
     private void appendLog(String t) {
@@ -74,13 +81,25 @@ public final class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setPadding(24,24,24,24);
         TextView status = new TextView(this); status.setText("DreamEngine\nHot-swappable C++ modules + Python scripts"); status.setTextSize(20f);
         Button importButton = new Button(this); importButton.setText("Import modules from Downloads"); importButton.setOnClickListener(v -> pickModuleDirectory());
+        LinearLayout editorBar = new LinearLayout(this); editorBar.setOrientation(LinearLayout.HORIZONTAL);
+        Button addEntity = new Button(this); addEntity.setText("+ Entity"); addEntity.setOnClickListener(v -> { nativeEditorCreate("entity"); refreshEditor(); });
+        Button addCamera = new Button(this); addCamera.setText("+ Camera"); addCamera.setOnClickListener(v -> { nativeEditorCreate("camera"); refreshEditor(); });
+        Button addLight = new Button(this); addLight.setText("+ Light"); addLight.setOnClickListener(v -> { nativeEditorCreate("light"); refreshEditor(); });
+        Button delEntity = new Button(this); delEntity.setText("Delete"); delEntity.setOnClickListener(v -> { nativeEditorDelete(); refreshEditor(); });
+        Button saveScene = new Button(this); saveScene.setText("Save Scene"); saveScene.setOnClickListener(v -> { File sceneDir=new File(getFilesDir(),"project/scenes"); sceneDir.mkdirs(); boolean ok=nativeEditorSave(new File(sceneDir,"main.scene").getAbsolutePath()); appendLog(ok?"Editor: scene saved\n":"Editor: scene save failed\n"); refreshEditor(); });
+        editorBar.addView(addEntity); editorBar.addView(addCamera); editorBar.addView(addLight); editorBar.addView(delEntity); editorBar.addView(saveScene);
         logView = new TextView(this); logView.setTextSize(11f); logView.setTypeface(android.graphics.Typeface.MONOSPACE);
         logScroll = new android.widget.ScrollView(this); logScroll.addView(logView);
         tabBar = new LinearLayout(this); tabBar.setOrientation(LinearLayout.HORIZONTAL);
         android.widget.HorizontalScrollView tabScroll = new android.widget.HorizontalScrollView(this); tabScroll.addView(tabBar);
         panelBox = new LinearLayout(this); panelBox.setOrientation(LinearLayout.VERTICAL);
         android.widget.ScrollView panelScroll = new android.widget.ScrollView(this); panelScroll.addView(panelBox);
-        root.addView(status); root.addView(importButton); root.addView(tabScroll);
+        root.addView(status); root.addView(importButton); root.addView(editorBar); root.addView(tabScroll);
+        LinearLayout editorInfo = new LinearLayout(this); editorInfo.setOrientation(LinearLayout.HORIZONTAL);
+        hierarchyView = new TextView(this); hierarchyView.setTextSize(12f); hierarchyView.setTypeface(android.graphics.Typeface.MONOSPACE);
+        inspectorView = new TextView(this); inspectorView.setTextSize(12f); inspectorView.setTypeface(android.graphics.Typeface.MONOSPACE);
+        android.widget.ScrollView hs=new android.widget.ScrollView(this); hs.addView(hierarchyView); android.widget.ScrollView is=new android.widget.ScrollView(this); is.addView(inspectorView);
+        editorInfo.addView(hs,new LinearLayout.LayoutParams(0,180,1)); editorInfo.addView(is,new LinearLayout.LayoutParams(0,180,1)); root.addView(editorInfo);
         root.addView(panelScroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         root.addView(logScroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         split.addView(surfaceView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
@@ -89,8 +108,15 @@ public final class MainActivity extends Activity {
         nativeStart(moduleDir.getAbsolutePath(), pythonHome.getAbsolutePath());
         appendLog(nativeDrainLog());
         syncUi();
+        refreshEditor();
         lastTickNanos = System.nanoTime();
         tickHandler.post(tick);
+    }
+
+    private void refreshEditor() {
+        if (hierarchyView == null) return;
+        hierarchyView.setText("HIERARCHY\n" + nativeEditorHierarchy());
+        inspectorView.setText("INSPECTOR\n" + nativeEditorInspector());
     }
 
     // ---------- Minimal Android panel host: reads the engine's UI model, draws plain views ----------

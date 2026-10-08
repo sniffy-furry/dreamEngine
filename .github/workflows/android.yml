@@ -40,6 +40,12 @@ jobs:
         with:
           gradle-version: '8.14'
 
+      - name: Host core regression tests
+        run: |
+          cmake -S . -B build-ci -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-ci --parallel 2
+          ./build-ci/phase234_tests
+
       - name: Prepare CPython 3.14 for Android
         run: python3 tools/prepare_cpython_android.py
 

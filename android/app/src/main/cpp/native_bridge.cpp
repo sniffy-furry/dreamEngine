@@ -5,10 +5,12 @@
 #include <string>
 #include "dream/core/engine.hpp"
 #include "dream/core/log.hpp"
+#include "dream/editor/editor.hpp"
 
 namespace {
 std::unique_ptr<dream::Engine> g_engine;
 std::string g_modules_dir;
+std::unique_ptr<dream::editor::Core> g_editor;
 
 // Minimal EGL context bound to the engine thread (the Android main thread).
 struct Gl {
@@ -64,6 +66,7 @@ Java_com_dreamingbully_dreamengine_MainActivity_nativeStart(JNIEnv* env, jclass,
     g_modules_dir = to_std(env, moduleDir);
     const std::string python = to_std(env, pythonHome);
 
+    g_editor = std::make_unique<dream::editor::Core>();
     g_engine = std::make_unique<dream::Engine>(dream::EngineConfig{.application_name="DreamEngine Android", .enable_validation=false});
     // A broken .so or missing Python must NOT take the whole engine down.
     if (!g_engine->load_external_modules(g_modules_dir))
@@ -143,10 +146,33 @@ Java_com_dreamingbully_dreamengine_MainActivity_nativeUpdate(JNIEnv*, jclass, jd
     if (g_engine) g_engine->update(static_cast<double>(dt));
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorHierarchy(JNIEnv* env, jclass) {
+    return env->NewStringUTF(g_editor ? g_editor->hierarchy_text().c_str() : "");
+}
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorInspector(JNIEnv* env, jclass) {
+    return env->NewStringUTF(g_editor ? g_editor->inspector_text().c_str() : "No editor");
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorCreate(JNIEnv* env, jclass, jstring kind) {
+    if (!g_editor) return -1; const char* k=kind?env->GetStringUTFChars(kind,nullptr):"entity";
+    auto e=g_editor->create_entity(k?k:"entity"); if(kind) env->ReleaseStringUTFChars(kind,k); return (jint)e.index;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorSelect(JNIEnv*, jclass, jint index) { return g_editor && g_editor->select((uint32_t)index); }
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorDelete(JNIEnv*, jclass) { return g_editor && g_editor->delete_selected(); }
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorSave(JNIEnv* env, jclass, jstring path) {
+    if (!g_editor || !path) return false; const char* p=env->GetStringUTFChars(path,nullptr); g_editor->state().scene_path=p?p:""; if(p)env->ReleaseStringUTFChars(path,p); std::string err; if(!g_editor->save_scene(&err)){dream::log_push(6,err);return false;} return true;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_dreamingbully_dreamengine_MainActivity_nativeStop(JNIEnv*, jclass) {
     if (!g_engine) return;
     gl_teardown();
     g_engine->shutdown();
     g_engine.reset();
+    g_editor.reset();
 }
