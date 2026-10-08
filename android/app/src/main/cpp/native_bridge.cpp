@@ -169,6 +169,25 @@ Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorSave(JNIEnv* env, jc
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorSetPlaying(JNIEnv*, jclass, jboolean playing) {
+    if (g_editor) g_editor->set_playing(playing == JNI_TRUE);
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorIsPlaying(JNIEnv*, jclass) {
+    return g_editor && g_editor->state().playing ? JNI_TRUE : JNI_FALSE;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_dreamingbully_dreamengine_MainActivity_nativeEditorMove(JNIEnv*, jclass, jfloat dx, jfloat dy, jfloat dz) {
+    if (!g_editor) return JNI_FALSE;
+    auto e = g_editor->state().selection.entity;
+    auto* t = g_editor->scene().world.transform(e);
+    if (!t) return JNI_FALSE;
+    t->px += dx; t->py += dy; t->pz += dz;
+    g_editor->state().dirty = true;
+    return JNI_TRUE;
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_dreamingbully_dreamengine_MainActivity_nativeStop(JNIEnv*, jclass) {
     if (!g_engine) return;
     gl_teardown();
