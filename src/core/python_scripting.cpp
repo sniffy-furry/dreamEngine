@@ -1,5 +1,7 @@
 #include "dream/core/python_scripting.hpp"
 #include "dream/core/log.hpp"
+#include "dream/core/properties.hpp"
+#include "dream/core/ui_model.hpp"
 #include <algorithm>
 #include <cstring>
 #include <dirent.h>
@@ -22,6 +24,16 @@ struct PythonScriptManager::Loaded {
 #endif
     bool failed = false;
 };
+
+namespace {
+PropertyRegistry* g_props = nullptr;
+UiModel* g_ui = nullptr;
+}
+
+void PythonScriptManager::bind(PropertyRegistry* props, UiModel* ui) noexcept {
+    g_props = props;
+    g_ui = ui;
+}
 
 PythonScriptManager::PythonScriptManager() = default;
 PythonScriptManager::~PythonScriptManager() { shutdown(); }
@@ -62,6 +74,77 @@ PyModuleDef kLogModule = {PyModuleDef_HEAD_INIT, "_dream_log", nullptr, -1, kLog
                           nullptr, nullptr, nullptr, nullptr};
 PyObject* init_dream_log() { return PyModule_Create(&kLogModule); }
 
+// ---- _dream: thin handle-based bindings (the friendly `dream.props` / `dream.ui` API is built on top) ----
+PyObject* d_props_register(PyObject*, PyObject* args) {
+    const char *name, *cat, *tags;
+    int kind;
+    double def, lo, hi;
+    if (!PyArg_ParseTuple(args, "sidddss", &name, &kind, &def, &lo, &hi, &cat, &tags)) return nullptr;
+    std::vector<std::string> tl;
+    std::string t(tags);
+    for (std::size_t pos = 0; pos <= t.size();) {
+        auto c = t.find(',', pos);
+        if (c == std::string::npos) c = t.size();
+        if (c > pos) tl.push_back(t.substr(pos, c - pos));
+        pos = c + 1;
+    }
+    const PropId id = g_props->register_prop(name, kind == 1 ? PropType::Bool : PropType::Float,
+                                             static_cast<float>(def), static_cast<float>(lo),
+                                             static_cast<float>(hi), cat, std::move(tl));
+    return PyLong_FromUnsignedLong(id);
+}
+PyObject* d_props_find(PyObject*, PyObject* args) {
+    const char* name;
+    if (!PyArg_ParseTuple(args, "s", &name)) return nullptr;
+    const PropId id = g_props->find(name);
+    return PyLong_FromLong(id == kInvalidProp ? -1 : static_cast<long>(id));
+}
+PyObject* d_props_get(PyObject*, PyObject* args) {
+    long id;
+    if (!PyArg_ParseTuple(args, "l", &id)) return nullptr;
+    return PyFloat_FromDouble(id < 0 ? 0.0 : g_props->get(static_cast<PropId>(id)));
+}
+PyObject* d_props_set(PyObject*, PyObject* args) {
+    long id;
+    double v;
+    if (!PyArg_ParseTuple(args, "ld", &id, &v)) return nullptr;
+    if (id >= 0) g_props->set(static_cast<PropId>(id), static_cast<float>(v));
+    Py_RETURN_NONE;
+}
+PyObject* d_ui_panel(PyObject*, PyObject* args) {
+    const char* name;
+    if (!PyArg_ParseTuple(args, "s", &name)) return nullptr;
+    return PyLong_FromUnsignedLong(g_ui->panel(name));
+}
+PyObject* d_ui_add(PyObject*, PyObject* args) {
+    unsigned long panel;
+    int kind;
+    long prop;
+    const char* text;
+    if (!PyArg_ParseTuple(args, "kils", &panel, &kind, &prop, &text)) return nullptr;
+    g_ui->add(static_cast<uint32_t>(panel), static_cast<WidgetKind>(kind),
+              prop < 0 ? kInvalidProp : static_cast<PropId>(prop), text);
+    Py_RETURN_NONE;
+}
+PyObject* d_ui_query(PyObject*, PyObject* args) {
+    unsigned long panel;
+    const char *m, *c, *t;
+    if (!PyArg_ParseTuple(args, "ksss", &panel, &m, &c, &t)) return nullptr;
+    return PyLong_FromSize_t(g_ui->add_query(static_cast<uint32_t>(panel), *g_props, m, c, t));
+}
+PyMethodDef kDreamMethods[] = {
+    {"props_register", d_props_register, METH_VARARGS, ""},
+    {"props_find", d_props_find, METH_VARARGS, ""},
+    {"props_get", d_props_get, METH_VARARGS, ""},
+    {"props_set", d_props_set, METH_VARARGS, ""},
+    {"ui_panel", d_ui_panel, METH_VARARGS, ""},
+    {"ui_add", d_ui_add, METH_VARARGS, ""},
+    {"ui_query", d_ui_query, METH_VARARGS, ""},
+    {nullptr, nullptr, 0, nullptr}};
+PyModuleDef kDreamModule = {PyModuleDef_HEAD_INIT, "_dream", nullptr, -1, kDreamMethods,
+                            nullptr, nullptr, nullptr, nullptr};
+PyObject* init_dream() { return PyModule_Create(&kDreamModule); }
+
 void log_py_error(const std::string& where) {
     log_push(6, "Python error in " + where);
     PyErr_Print();  // goes through sys.stderr -> engine log
@@ -90,6 +173,7 @@ bool PythonScriptManager::start(const std::string& python_home) {
     if (running_) return true;
 #if defined(DREAM_ENGINE_WITH_PYTHON)
     PyImport_AppendInittab("_dream_log", init_dream_log);
+    PyImport_AppendInittab("_dream", init_dream);
     PyConfig config;
     PyConfig_InitIsolatedConfig(&config);
     config.install_signal_handlers = 0;
@@ -113,6 +197,30 @@ bool PythonScriptManager::start(const std::string& python_home) {
         "        _dream_log.write(s); return len(s)\n"
         "    def flush(self): pass\n"
         "sys.stdout = sys.stderr = _W()\n");
+    // `import dream` -> dream.props / dream.ui (friendly wrappers over the handle-based _dream module)
+    PyRun_SimpleString(
+        "def _boot():\n"
+        "    import sys, types, _dream as d\n"
+        "    def pid(p): return p if isinstance(p, int) else d.props_find(p)\n"
+        "    class Props:\n"
+        "        def register(self, name, type=float, default=0.0, min=0.0, max=1.0, category='', tags=()):\n"
+        "            return d.props_register(name, 1 if type is bool else 0, float(default), float(min), float(max), category, ','.join(tags))\n"
+        "        def find(self, name): return d.props_find(name)\n"
+        "        def get(self, p): return d.props_get(pid(p))\n"
+        "        def set(self, p, v): d.props_set(pid(p), float(v))\n"
+        "    class Panel:\n"
+        "        def __init__(self, i): self.id = i\n"
+        "        def slider(self, p, label=''): d.ui_add(self.id, 0, pid(p), label); return self\n"
+        "        def toggle(self, p, label=''): d.ui_add(self.id, 1, pid(p), label); return self\n"
+        "        def label(self, text): d.ui_add(self.id, 2, -1, text); return self\n"
+        "        def value(self, p, label=''): d.ui_add(self.id, 3, pid(p), label); return self\n"
+        "        def query(self, module='', category='', tag=''): d.ui_query(self.id, module, category, tag); return self\n"
+        "    class Ui:\n"
+        "        def panel(self, name): return Panel(d.ui_panel(name))\n"
+        "    m = types.ModuleType('dream')\n"
+        "    m.props = Props(); m.ui = Ui()\n"
+        "    sys.modules['dream'] = m\n"
+        "_boot(); del _boot\n");
     running_ = true;
     log_push(4, "Python started");
     return true;
