@@ -20,6 +20,8 @@ public final class MainActivity extends Activity {
     private static native void nativeStart(String moduleDir, String pythonHome);
     private static native void nativeStop();
     private static native void nativeUpdate(double dt);
+    private static native void nativeReload();
+    private static native String nativeDrainLog();
     private final Handler tickHandler = new Handler(Looper.getMainLooper());
     private long lastTickNanos;
     private final Runnable tick = new Runnable() {
@@ -29,10 +31,22 @@ public final class MainActivity extends Activity {
             double dt = lastTickNanos == 0 ? 1.0 / 60.0 : Math.min((now - lastTickNanos) * 1.0e-9, 0.25);
             lastTickNanos = now;
             nativeUpdate(dt);
+            if (++logTicks % 30 == 0) appendLog(nativeDrainLog());
             tickHandler.postDelayed(this, 16);
         }
     };
     private File moduleDir;
+    private int logTicks;
+    private TextView logView;
+    private android.widget.ScrollView logScroll;
+    private final StringBuilder logText = new StringBuilder();
+    private void appendLog(String t) {
+        if (t == null || t.isEmpty() || logView == null) return;
+        logText.append(t);
+        if (logText.length() > 12000) logText.delete(0, logText.length() - 12000);
+        logView.setText(logText);
+        logScroll.post(() -> logScroll.fullScroll(android.view.View.FOCUS_DOWN));
+    }
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -45,8 +59,13 @@ public final class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setPadding(32,32,32,32);
         TextView status = new TextView(this); status.setText("DreamEngine\nHot-swappable C++ modules + Python scripts"); status.setTextSize(20f);
         Button importButton = new Button(this); importButton.setText("Import modules from Downloads"); importButton.setOnClickListener(v -> pickModuleDirectory());
-        root.addView(status); root.addView(importButton); setContentView(root);
+        logView = new TextView(this); logView.setTextSize(11f); logView.setTypeface(android.graphics.Typeface.MONOSPACE);
+        logScroll = new android.widget.ScrollView(this); logScroll.addView(logView);
+        root.addView(status); root.addView(importButton);
+        root.addView(logScroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        setContentView(root);
         nativeStart(moduleDir.getAbsolutePath(), pythonHome.getAbsolutePath());
+        appendLog(nativeDrainLog());
         lastTickNanos = System.nanoTime();
         tickHandler.post(tick);
     }
@@ -94,27 +113,50 @@ public final class MainActivity extends Activity {
         if (requestCode != PICK_MODULE_DIR || resultCode != RESULT_OK || data == null) return;
         Uri tree = data.getData();
         try { getContentResolver().takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
-        copyFromTree(tree);
-        // The current process keeps old modules loaded. Restart the app after import for a clean hot swap.
+        int copied = copyFromTree(tree);
+        appendLog("imported " + copied + " file(s) (.py/.so, searched all subfolders)\n");
+        if (copied > 0) nativeReload();   // live hot-swap, no restart needed
+        appendLog(nativeDrainLog());
     }
-    private void copyFromTree(Uri tree) {
-        android.database.Cursor c = null;
-        // Use DocumentsContract URIs directly to avoid a support-library dependency.
-        Uri children = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(tree, android.provider.DocumentsContract.getTreeDocumentId(tree));
-        String[] projection = {android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID, android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME};
-        c = getContentResolver().query(children, projection, null, null, null);
-        if (c == null) return;
-        int idCol=c.getColumnIndex(projection[0]), nameCol=c.getColumnIndex(projection[1]);
-        while(c.moveToNext()) {
-            String id=c.getString(idCol), name=c.getString(nameCol);
-            if (!name.endsWith(".so") && !name.endsWith(".py")) continue;
-            Uri fileUri=android.provider.DocumentsContract.buildDocumentUriUsingTree(tree,id);
-            File out=new File(moduleDir,name);
-            try(InputStream in=getContentResolver().openInputStream(fileUri); OutputStream os=new FileOutputStream(out)) {
-                byte[] b=new byte[8192]; int n; while((n=in.read(b))!=-1) os.write(b,0,n);
-            } catch(Exception ignored) {}
+    private int copyFromTree(Uri tree) {
+        return walkTree(tree, android.provider.DocumentsContract.getTreeDocumentId(tree), 0);
+    }
+    private int walkTree(Uri tree, String docId, int depth) {
+        if (depth > 6) return 0;
+        int copied = 0;
+        Uri children = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(tree, docId);
+        String[] projection = {
+            android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE};
+        try (android.database.Cursor c = getContentResolver().query(children, projection, null, null, null)) {
+            if (c == null) return 0;
+            while (c.moveToNext()) {
+                String id = c.getString(0), name = c.getString(1), mime = c.getString(2);
+                if (name == null) continue;
+                if (android.provider.DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
+                    if (name.startsWith(".") || name.equals("Android")) continue;
+                    copied += walkTree(tree, id, depth + 1);
+                    continue;
+                }
+                if (!name.endsWith(".so") && !name.endsWith(".py")) continue;
+                Uri fileUri = android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, id);
+                File tmp = new File(moduleDir, name + ".tmp");
+                File out = new File(moduleDir, name);
+                try (InputStream in = getContentResolver().openInputStream(fileUri); OutputStream os = new FileOutputStream(tmp)) {
+                    byte[] b = new byte[8192]; int n; while ((n = in.read(b)) != -1) os.write(b, 0, n);
+                    os.flush();
+                    // rename = safe even if the old .so is still mapped
+                    if (out.exists()) out.delete();
+                    if (tmp.renameTo(out)) copied++;
+                    appendLog("  copied " + name + "\n");
+                } catch (Exception e) {
+                    appendLog("  FAILED " + name + ": " + e + "\n");
+                    tmp.delete();
+                }
+            }
         }
-        c.close();
+        return copied;
     }
     @Override protected void onDestroy() { tickHandler.removeCallbacks(tick); nativeStop(); super.onDestroy(); }
 }
