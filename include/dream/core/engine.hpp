@@ -2,6 +2,8 @@
 #include "event_bus.hpp"
 #include "module.hpp"
 #include "module_loader.hpp"
+#include "properties.hpp"
+#include "ui_model.hpp"
 #include "python_scripting.hpp"
 #include "registry.hpp"
 #include "types.hpp"
@@ -36,9 +38,13 @@ public:
     bool load_external_modules(const std::string& directory);
     bool start_python(const std::string& python_home, const std::string& script_directory);
     void update_python(double dt);
+    bool reload_modules(const std::string& directory);
     void shutdown() noexcept;
     std::size_t external_module_count() const noexcept { return module_loader_.loaded_count(); }
     const PythonScriptManager& python_scripts() const noexcept { return python_scripts_; }
+
+    PropertyRegistry& props() noexcept { return props_; }
+    UiModel& ui() noexcept { return ui_; }
 
     EngineAPI& api() noexcept { return api_; }
     const EngineConfig& config() const noexcept { return config_; }
@@ -50,6 +56,8 @@ private:
     bool initialized_ = false;
     ModuleLoader module_loader_;
     PythonScriptManager python_scripts_;
+    PropertyRegistry props_;
+    UiModel ui_;
     DreamEngineHostAPI external_host_{};
 };
 

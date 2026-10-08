@@ -14,6 +14,8 @@ add_library(dream_engine_core STATIC
     src/core/module_loader.cpp
     src/core/registry.cpp
     src/core/python_scripting.cpp
+    src/core/log.cpp
+    src/core/properties.cpp
 )
 target_include_directories(dream_engine_core PUBLIC include)
 target_compile_features(dream_engine_core PUBLIC cxx_std_20)
