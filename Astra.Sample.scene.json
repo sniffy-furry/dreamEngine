@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "scene": "Main",
+  "entities": [
+    {"id":2,"name":"Child","parent":1,"active":true,"position":[0,2,0]},
+    {"id":1,"name":"AstraRoot","parent":0,"active":true,"position":[0,0,0]}
+  ]
+}

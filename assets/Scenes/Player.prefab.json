@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "prefab": "Player",
+  "guid": "generated-on-import",
+  "basePrefab": null,
+  "nestedPrefabs": [],
+  "root": {"name":"Player","position":[0,1,0],"children":[]},
+  "overrides": []
+}

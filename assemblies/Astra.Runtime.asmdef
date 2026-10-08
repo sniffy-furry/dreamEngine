@@ -1,0 +1,8 @@
+{
+  "name": "Astra.Runtime",
+  "references": [ "Astra.Managed" ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": true,
+  "overrideReferences": false
+}

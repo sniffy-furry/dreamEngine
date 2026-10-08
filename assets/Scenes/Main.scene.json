@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "scene": "Main",
+  "entities": [
+    {"id":1,"name":"World","parent":0,"active":true,"position":[0,0,0]},
+    {"id":2,"name":"Camera","parent":1,"active":true,"position":[0,2,-6]},
+    {"id":3,"name":"Sun","parent":1,"active":true,"position":[0,5,0]}
+  ]
+}

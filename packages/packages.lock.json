@@ -1,0 +1,10 @@
+{
+  "lockVersion": 1,
+  "dependencies": {
+    "astra.core": { "version": "0.1.0", "source": "embedded" },
+    "astra.render.graph": { "version": "0.1.0", "source": "embedded" },
+    "astra.physics": { "version": "0.1.0", "source": "embedded" },
+    "astra.ui": { "version": "0.1.0", "source": "embedded" },
+    "astra.networking": { "version": "0.1.0", "source": "embedded" }
+  }
+}

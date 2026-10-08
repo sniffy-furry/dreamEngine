@@ -1,0 +1,4 @@
+8a16dd91e751443bf9d5434f2d0ecff8de06b9621a25e865ee134859b3c232ba  /mnt/data/AstraForgePackage/AstraForgeEngine-v0.1.0/artifacts/linux-x64/Astra.NativeTests
+5f4923318a6ebd29af859b9aed2c2f574dcb1ea54592f0b35589be5f9fe1b576  /mnt/data/AstraForgePackage/AstraForgeEngine-v0.1.0/artifacts/linux-x64/Astra.Sample
+f8d80590d278384c276dbeccb2cb1d6cb3af78b23431b0f37830c2cb4a2bc062  /mnt/data/AstraForgePackage/AstraForgeEngine-v0.1.0/artifacts/linux-x64/libAstra.Native.so
+d5ebf5134163c31a23065b79099ddedc95192c6933271f4b7c7a2525adc99ee1  /mnt/data/AstraForgePackage/AstraForgeEngine-v0.1.0/Astra.Sample.scene.json

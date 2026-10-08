@@ -1,49 +1,40 @@
-cmake_minimum_required(VERSION 3.22)
-project(DreamEngine LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.20)
+project(AstraForgeEngine VERSION 0.1.0 LANGUAGES CXX)
 
+option(ASTRA_BUILD_TESTS "Build native tests" ON)
+option(ASTRA_BUILD_SAMPLE "Build sample runtime" ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(DREAM_ENGINE_BUILD_TUTORIAL "Build tutorial module" OFF)
-
-add_library(dream_engine_core STATIC
-    src/core/engine.cpp
-    src/core/event_bus.cpp
-    src/core/module.cpp
-    src/core/module_loader.cpp
-    src/core/registry.cpp
-    src/core/python_scripting.cpp
-    src/core/log.cpp
-    src/core/properties.cpp
-    src/ecs/ecs.cpp
-    src/scene/scene.cpp
-    src/editor/editor.cpp
-    src/graphics/gles_device.cpp
-    src/assets/assets.cpp
-    src/project/project.cpp
+add_library(Astra.Native SHARED
+    native/src/Engine.cpp
+    native/src/Interop.cpp
 )
-target_include_directories(dream_engine_core PUBLIC include)
-target_compile_features(dream_engine_core PUBLIC cxx_std_20)
-
+target_include_directories(Astra.Native PUBLIC native/include)
+target_compile_definitions(Astra.Native PRIVATE ASTRA_BUILDING_NATIVE=1)
 if (MSVC)
-    target_compile_options(dream_engine_core PRIVATE /W4 /permissive-)
+  target_compile_options(Astra.Native PRIVATE /W4 /permissive-)
 else()
-    target_compile_options(dream_engine_core PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(Astra.Native PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 endif()
 
-option(DREAM_ENGINE_BUILD_RENDER_CUBE "Build render_cube module (needs GLES3 headers)" OFF)
-if(DREAM_ENGINE_BUILD_RENDER_CUBE)
-    add_library(render_cube_module SHARED modules/render_cube/render_cube.cpp)
-    target_include_directories(render_cube_module PRIVATE include)
-    set_target_properties(render_cube_module PROPERTIES PREFIX "" OUTPUT_NAME "render_cube")
+if (WIN32)
+  target_link_libraries(Astra.Native PRIVATE ws2_32)
+else()
+  target_link_libraries(Astra.Native PRIVATE pthread dl)
 endif()
 
-if(DREAM_ENGINE_BUILD_TUTORIAL)
-    add_subdirectory(modules/tutorial)
+if (ASTRA_BUILD_SAMPLE)
+  add_executable(Astra.Sample native/src/main.cpp)
+  target_link_libraries(Astra.Sample PRIVATE Astra.Native)
+  target_include_directories(Astra.Sample PRIVATE native/include)
 endif()
 
-add_executable(engine_demo examples/main.cpp)
-add_executable(phase234_tests tests/phase234_tests.cpp)
-target_link_libraries(phase234_tests PRIVATE dream_engine_core)
-target_link_libraries(engine_demo PRIVATE dream_engine_core)
+if (ASTRA_BUILD_TESTS)
+  enable_testing()
+  add_executable(Astra.NativeTests native/tests/NativeTests.cpp)
+  target_link_libraries(Astra.NativeTests PRIVATE Astra.Native)
+  target_include_directories(Astra.NativeTests PRIVATE native/include)
+  add_test(NAME Astra.NativeTests COMMAND Astra.NativeTests)
+endif()

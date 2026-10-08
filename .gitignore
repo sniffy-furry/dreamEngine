@@ -1,0 +1,14 @@
+/build/
+/bin/
+/obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.pdb
+*.dll
+*.so
+*.dylib
+*.apk
+*.aab
+*.exe

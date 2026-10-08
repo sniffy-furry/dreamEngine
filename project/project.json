@@ -1,0 +1,7 @@
+{
+  "name": "AstraForge Sample",
+  "engineVersion": "0.1.0",
+  "defaultScene": "assets/Scenes/Main.scene.json",
+  "scripting": { "targetFramework": "net10.0", "backend": "managed/native-interop" },
+  "coordinateSystem": "left-handed-y-up-z-forward-meters"
+}

@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "astra.core": "0.1.0",
+    "astra.render.graph": "0.1.0",
+    "astra.physics": "0.1.0",
+    "astra.ui": "0.1.0",
+    "astra.networking": "0.1.0"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Astra.Editor",
+  "references": [ "Astra.Managed" ],
+  "includePlatforms": [ "Editor" ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": true,
+  "overrideReferences": false
+}
