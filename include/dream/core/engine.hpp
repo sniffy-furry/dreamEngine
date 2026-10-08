@@ -36,6 +36,7 @@ public:
     bool load_external_modules(const std::string& directory);
     bool start_python(const std::string& python_home, const std::string& script_directory);
     void update_python(double dt);
+    bool reload_modules(const std::string& directory);
     void shutdown() noexcept;
     std::size_t external_module_count() const noexcept { return module_loader_.loaded_count(); }
     const PythonScriptManager& python_scripts() const noexcept { return python_scripts_; }

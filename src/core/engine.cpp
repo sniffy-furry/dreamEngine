@@ -1,17 +1,11 @@
 #include "dream/core/engine.hpp"
-#if defined(__ANDROID__)
-#include <android/log.h>
-#endif
+#include "dream/core/log.hpp"
 #include <chrono>
 
 
 namespace {
 void host_log(int level, const char* message) {
-#if defined(__ANDROID__)
-    __android_log_write(level, "DreamEngine", message ? message : "");
-#else
-    (void)level; (void)message;
-#endif
+    dream::log_push(level, message ? message : "");
 }
 double host_time() {
     using clock = std::chrono::steady_clock;
@@ -76,6 +70,16 @@ bool Engine::load_external_modules(const std::string& directory) {
     external_host_.get_time_seconds = host_time;
     python_scripts_.scan(directory);
     return module_loader_.load_directory(directory, external_host_);
+}
+
+bool Engine::reload_modules(const std::string& directory) {
+    // Live hot-swap: no app restart needed.
+    python_scripts_.unload();
+    const bool native_ok = load_external_modules(directory);   // dlcloses old .so, dlopens new
+    const bool py_ok = python_scripts_.running() ? python_scripts_.run_directory(directory) : false;
+    log_push(4, "reload done: native modules=" + std::to_string(module_loader_.loaded_count()) +
+                    ", python scripts=" + std::to_string(python_scripts_.scripts().size()));
+    return native_ok && py_ok;
 }
 
 void Engine::shutdown() noexcept {

@@ -2,29 +2,42 @@
 #include <memory>
 #include <string>
 #include "dream/core/engine.hpp"
+#include "dream/core/log.hpp"
 
-namespace { std::unique_ptr<dream::Engine> g_engine; }
+namespace { std::unique_ptr<dream::Engine> g_engine; std::string g_modules_dir; }
+
+static std::string to_std(JNIEnv* env, jstring s) {
+    if (!s) return {};
+    const char* c = env->GetStringUTFChars(s, nullptr);
+    std::string out = c ? c : "";
+    if (c) env->ReleaseStringUTFChars(s, c);
+    return out;
+}
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_dreamingbully_dreamengine_MainActivity_nativeStart(JNIEnv* env, jclass, jstring moduleDir, jstring pythonHome) {
     if (g_engine) return;
-    const char* module_chars = env->GetStringUTFChars(moduleDir, nullptr);
-    const char* python_chars = env->GetStringUTFChars(pythonHome, nullptr);
-    std::string modules = module_chars ? module_chars : "";
-    std::string python = python_chars ? python_chars : "";
-    if (module_chars) env->ReleaseStringUTFChars(moduleDir, module_chars);
-    if (python_chars) env->ReleaseStringUTFChars(pythonHome, python_chars);
+    g_modules_dir = to_std(env, moduleDir);
+    const std::string python = to_std(env, pythonHome);
 
     g_engine = std::make_unique<dream::Engine>(dream::EngineConfig{.application_name="DreamEngine Android", .enable_validation=false});
-    if (!g_engine->load_external_modules(modules)) {
-        g_engine.reset();
-        return;
-    }
-    if (!g_engine->start_python(python, modules)) {
-        g_engine.reset();
-        return;
-    }
-    g_engine->initialize();
+    // A broken .so or missing Python must NOT take the whole engine down.
+    if (!g_engine->load_external_modules(g_modules_dir))
+        dream::log_push(5, "some native modules failed to load (see above)");
+    if (!g_engine->start_python(python, g_modules_dir))
+        dream::log_push(5, "Python scripts not started (see above)");
+    if (!g_engine->initialize())
+        dream::log_push(6, "engine initialize failed");
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_dreamingbully_dreamengine_MainActivity_nativeReload(JNIEnv*, jclass) {
+    if (g_engine) g_engine->reload_modules(g_modules_dir);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_dreamingbully_dreamengine_MainActivity_nativeDrainLog(JNIEnv* env, jclass) {
+    return env->NewStringUTF(dream::log_drain().c_str());
 }
 
 extern "C" JNIEXPORT void JNICALL

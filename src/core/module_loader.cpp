@@ -4,6 +4,7 @@
 #if defined(__ANDROID__)
 #include <android/log.h>
 #endif
+#include "dream/core/log.hpp"
 #include <cstring>
 #include <algorithm>
 
@@ -12,11 +13,8 @@ namespace dream {
 namespace {
 constexpr const char* kTag = "DreamEngine";
 void log_line(int level, const char* message) {
-#if defined(__ANDROID__)
-    __android_log_write(level, kTag, message ? message : "");
-#else
-    (void)level; (void)message;
-#endif
+    (void)kTag;
+    log_push(level, message ? message : "");
 }
 }
 
@@ -51,25 +49,29 @@ bool ModuleLoader::load_directory(const std::string& directory, const DreamEngin
         void* handle = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
         if (!handle) {
             all_ok = false;
-            log_line(6, dlerror());
+            const char* err = dlerror();
+            log_line(6, (std::string("dlopen failed: ") + path + ": " + (err ? err : "?")).c_str());
             continue;
         }
         auto get_desc = reinterpret_cast<DreamModuleGetDescriptorFn>(dlsym(handle, "dream_module_get_descriptor"));
         auto create = reinterpret_cast<DreamModuleCreateFn>(dlsym(handle, "dream_module_create"));
         auto destroy = reinterpret_cast<DreamModuleDestroyFn>(dlsym(handle, "dream_module_destroy"));
         if (!get_desc || !create || !destroy) {
+            log_line(6, (path + ": missing dream_module_* exports").c_str());
             dlclose(handle);
             all_ok = false;
             continue;
         }
         const auto* desc = get_desc();
         if (!desc || desc->abi_version != DREAM_ENGINE_MODULE_ABI_VERSION || !desc->id || !desc->name) {
+            log_line(6, (path + ": bad descriptor / ABI mismatch").c_str());
             dlclose(handle);
             all_ok = false;
             continue;
         }
         DreamEngineModule* module = create(&host);
         if (!module || !module->initialize || !module->update || !module->shutdown || !module->initialize(module, &host)) {
+            log_line(6, (path + ": module initialize failed").c_str());
             if (module && destroy) destroy(module);
             dlclose(handle);
             all_ok = false;
@@ -81,6 +83,7 @@ bool ModuleLoader::load_directory(const std::string& directory, const DreamEngin
         loaded->destroy = destroy;
         loaded->path = path;
         loaded_.push_back(std::move(loaded));
+        log_line(4, ("loaded native module: " + path).c_str());
     }
     return all_ok;
 }
