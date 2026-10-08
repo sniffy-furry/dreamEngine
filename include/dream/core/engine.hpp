@@ -1,0 +1,69 @@
+#pragma once
+#include "event_bus.hpp"
+#include "module.hpp"
+#include "module_loader.hpp"
+#include "properties.hpp"
+#include "ui_model.hpp"
+#include "python_scripting.hpp"
+#include "registry.hpp"
+#include "types.hpp"
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace dream {
+
+class EngineAPI final {
+public:
+    Registry& services() noexcept { return registry_; }
+    EventBus& events() noexcept { return events_; }
+
+private:
+    Registry registry_;
+    EventBus events_;
+    friend class Engine;
+};
+
+class Engine final {
+public:
+    explicit Engine(EngineConfig config = {});
+    ~Engine();
+
+    Engine(const Engine&) = delete;
+    Engine& operator=(const Engine&) = delete;
+
+    bool add_module(std::unique_ptr<IEngineModule> module);
+    bool initialize();
+    void update(double dt);
+    bool load_external_modules(const std::string& directory);
+    bool start_python(const std::string& python_home, const std::string& script_directory);
+    void update_python(double dt);
+    bool reload_modules(const std::string& directory);
+    // Rendering (call with the GL context current)
+    void render_surface_ready(int w, int h) { module_loader_.gl_init_all(w, h); }
+    void render_surface_resized(int w, int h) { module_loader_.gl_resize_all(w, h); }
+    void render_frame(double dt) { module_loader_.gl_draw_all(dt); }
+    void render_surface_lost() { module_loader_.gl_shutdown_all(); }
+    void shutdown() noexcept;
+    std::size_t external_module_count() const noexcept { return module_loader_.loaded_count(); }
+    const PythonScriptManager& python_scripts() const noexcept { return python_scripts_; }
+
+    PropertyRegistry& props() noexcept { return props_; }
+    UiModel& ui() noexcept { return ui_; }
+
+    EngineAPI& api() noexcept { return api_; }
+    const EngineConfig& config() const noexcept { return config_; }
+
+private:
+    EngineConfig config_;
+    EngineAPI api_;
+    std::vector<std::unique_ptr<IEngineModule>> modules_;
+    bool initialized_ = false;
+    ModuleLoader module_loader_;
+    PythonScriptManager python_scripts_;
+    PropertyRegistry props_;
+    UiModel ui_;
+    DreamEngineHostAPI external_host_{};
+};
+
+} // namespace dream

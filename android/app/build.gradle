@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.dreamingbully.dreamengine'
+    compileSdk 36
+    ndkVersion '27.2.12479018'
+
+    defaultConfig {
+        applicationId 'com.dreamingbully.dreamengine'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName '0.1.1'
+
+        externalNativeBuild {
+            cmake {
+                cppFlags '-std=c++20'
+                arguments '-DANDROID_STL=c++_shared'
+            }
+        }
+
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
+    }
+
+    buildTypes {
+        debug {
+            externalNativeBuild {
+                cmake {
+                    cppFlags '-std=c++20'
+                }
+            }
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.31.6'
+        }
+    }
+}
